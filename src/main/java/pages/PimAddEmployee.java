@@ -1,241 +1,224 @@
 package pages;
 
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.TimeoutException;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
-
 import base.BasePage;
 import utils.LocatorLoader;
-import java.time.Duration;
 
-/**
- * Page Object representing the PIM (Personnel Information Management) 
- * Add Employee and Employee List workflows in OrangeHRM.
- */
 public class PimAddEmployee extends BasePage {
 
-    // Centralised cached locators loaded dynamically via configurations
-    private final By menuPim = By.xpath(LocatorLoader.getValue("menu.pim"));
-    private final By addBtn = By.xpath(LocatorLoader.getValue("pim.addBtn"));
-    private final By firstNameField = By.xpath(LocatorLoader.getValue("pim.firstName"));
-    private final By lastNameField = By.xpath(LocatorLoader.getValue("pim.lastName"));
-    private final By employeeIdField = By.xpath(LocatorLoader.getValue("pim.employeeId"));
-    private final By saveBtn = By.xpath(LocatorLoader.getValue("pim.saveBtn"));
-    private final By successToast = By.xpath(LocatorLoader.getValue("pim.successToast"));
-    private final By employeeListTab = By.xpath(LocatorLoader.getValue("pim.employeeListTab"));
-    private final By resetBtn = By.xpath(LocatorLoader.getValue("pim.resetBtn"));
-    private final By searchEmpIdField = By.xpath(LocatorLoader.getValue("pim.searchEmpId"));
-    private final By searchBtn = By.xpath(LocatorLoader.getValue("pim.searchBtn"));
-    
-    private By detailsSaveBtn;
+    private final By menuPim = locator("menu.pim");
+    private final By addBtn = locator("pim.addBtn");
+    private final By firstNameField = locator("pim.firstName");
+    private final By lastNameField = locator("pim.lastName");
+    private final By employeeIdField = locator("pim.employeeId");
+    private final By saveBtn = locator("pim.saveBtn");
+    private final By successToast = locator("pim.successToast");
+    private final By employeeListTab = locator("pim.employeeListTab");
+    private final By resetBtn = locator("pim.resetBtn");
+    private final By searchEmpIdField = locator("pim.searchEmpId");
+    private final By searchBtn = locator("pim.searchBtn");
+    private final By detailsSaveBtn = locator("pim.detailsSaveBtn");
+
+    private final By licenseNoField = locator("pim.licenseNoField");
+    private final By firstNameRequired = locator("pim.firstNameRequiredError");
+    private final By lastNameRequired = locator("pim.lastNameRequiredError");
+
+    private final By maritalDropdown = locator("pim.maritalDropdown");
+    private final By optionMarried = locator("pim.maritalOptionMarried");
+    private final By genderMaleRadio = locator("pim.genderMaleRadio");
+    private final By maritalSelected = locator("pim.maritalSelected");
+    private final By genderMaleInput = locator("pim.genderMaleInput");
+    private final By personalSaveBtn = locator("pim.personalDetailsSaveBtn");
+
+    private final By dateOfBirthField = By.xpath("//label[text()='Date of Birth']/ancestor::div[contains(@class,'oxd-input-group')]//input");
+    private final By idCollisionSpanError = By.xpath("//span[contains(@class,'oxd-input-field-error-message') and text()='Employee Id already exists']");
+    private final By deleteIconFromRow = locator("pim.deleteIconFromRow");
+    private final By confirmDeleteBtn = locator("pim.confirmDeleteBtn");
+    private final By noRecordsFoundText = locator("pim.noRecordsFoundText");
+    private final By formLoaderOverlay = By.className("oxd-form-loader");
+
+    private final WebDriverWait explicitWait;
 
     public PimAddEmployee(WebDriver driver) {
         super(driver);
-        try {
-            this.detailsSaveBtn = By.xpath(LocatorLoader.getValue("pim.detailsSaveBtn"));
-        } catch (Exception e) {
-            System.out.println("WARNING: File properties fetch failed for 'pim.detailsSaveBtn'. Applying hardcoded runtime fallback locator.");
-            // Direct, standard layout structural path fallback for OrangeHRM details screen
-            this.detailsSaveBtn = By.xpath("//div[contains(@class, 'orangehrm-custom-fields')]//button[@type='submit'] | (//button[@type='submit'])");
-        }
+        explicitWait = new WebDriverWait(driver, Duration.ofSeconds(15));
     }
 
-    /**
-     * Navigates to the main PIM management module from the left sidebar panel menu.
-     * Engineered with dynamic retry fallback mechanics to handle UI thread rendering delays.
-     */
+    private By locator(String key) {
+        return By.xpath(LocatorLoader.getValue(key));
+    }
+
+    private By employeeCell(String employeeId) {
+        return By.xpath("//div[@role='row' and contains(., '" + employeeId + "')]");
+    }
+
+    private By employeeCheckbox(String employeeId) {
+        return By.xpath("//div[@role='row' and contains(., '" + employeeId + "')]//div[@role='cell']//input[@type='checkbox']/following-sibling::span");
+    }
+
     public void navigateToPIM() {
-        try {
-            // 1. Wait explicitly until the PIM menu button layout becomes fully visible and clickable
-            WebElement pimMenuButton = wait.until(ExpectedConditions.elementToBeClickable(menuPim));
-            
-            // 2. Perform a standard clean programmatic click action
-            pimMenuButton.click();
-            System.out.println("LOG: Successfully registered navigation click to PIM module.");
-        } catch (Exception e) {
-            System.out.println("WARNING: Standard click intercepted by overlay. Injecting JavaScript action executor bypass...");
-            try {
-                // Fallback Bypass: Execute script click directly on the DOM node to override layout animation blocks
-                WebElement pimMenuButtonFallback = driver.findElement(menuPim);
-                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", pimMenuButtonFallback);
-                System.out.println("LOG: Successfully forced navigation click to PIM module via JavaScript.");
-            } catch (Exception fatalEx) {
-                System.err.println("LOG ERROR: High-priority navigation crash. Could not interact with PIM sidebar menu link.");
-                throw fatalEx;
-            }
-        }
-        
-        // 3. System Sync Point: Explicitly block down execution until the browser URL registers the module change state
+        clickElement(menuPim);
         wait.until(ExpectedConditions.urlContains("/pim/"));
     }
 
-    /**
-     * Complete step-by-step creation of a new employee profile.
-     * Captures and returns the auto-generated ID string.
-     */
-    public String createNewEmployee(String first, String last) {
+    public void openAddEmployeeForm() {
         clickElement(addBtn);
-        
-        safeEnterText(firstNameField, first);
-        safeEnterText(lastNameField, last);
-        
-        // Wait until ID field is visible and populated with text
-        WebElement idElement = wait.until(ExpectedConditions.visibilityOfElementLocated(employeeIdField));
-        wait.until(d -> !idElement.getAttribute("value").trim().isEmpty());
-        String empId = idElement.getAttribute("value").trim();
-        System.out.println("LOG: Successfully captured auto-generated Employee ID: " + empId);
-        
+    }
+
+    private void clearWithKeyboard(By locator) {
+        WebElement element = explicitWait.until(ExpectedConditions.visibilityOfElementLocated(locator));
+        String os = System.getProperty("os.name").toLowerCase();
+        Keys modifier = os.contains("mac") ? Keys.COMMAND : Keys.CONTROL;
+        element.sendKeys(Keys.chord(modifier, "a"));
+        element.sendKeys(Keys.BACK_SPACE);
+    }
+
+    public void clickSaveOnAddEmployee() {
         clickElement(saveBtn);
-        
-        // Wait for page redirection to the secondary details form layout structure
-        wait.until(ExpectedConditions.urlContains("viewPersonalDetails"));
-        
-        // Click the secondary details save button
-        clickElement(detailsSaveBtn);
-        System.out.println("LOG: Clicked the secondary details form layout save button.");
-        
-        // Handle success notification pop-up safely without crashing the script execution loop
-        try {
-            WebDriverWait shortWait = new WebDriverWait(driver, Duration.ofSeconds(5));
-            shortWait.until(ExpectedConditions.visibilityOfElementLocated(successToast));
-            System.out.println("LOG: Success banner validation complete.");
-        } catch (Exception e) {
-            System.out.println("WARNING: Success toast was skipped (either vanished instantly or locator mismatched), proceeding with workflow execution.");
-        }
-        
-        return empId;
     }
 
-    /**
-     * Filters the central data grid layout to find a specific employee record by ID.
-     * Enhanced with table loading sync points to prevent racing condition failures.
-     */
-    public boolean searchEmployeeById(String empId) {
-        clickElement(employeeListTab);
-        
-        // Clear lingering search parameters from prior runs if present
-        try { 
-            clickElement(resetBtn); 
+    public boolean isRequiredFieldsErrorDisplayed() {
+        try {
+            new WebDriverWait(driver, Duration.ofSeconds(5))
+                    .until(ExpectedConditions.invisibilityOfElementLocated(formLoaderOverlay));
         } catch (Exception e) {
-            // Optional element; continue if reset button is not interactive or present
         }
-        
-        safeEnterText(searchEmpIdField, empId);
+        return isElementDisplayed(firstNameRequired) && isElementDisplayed(lastNameRequired);
+    }
+
+    public String getGeneratedEmployeeId() {
+        WebElement idField = explicitWait.until(ExpectedConditions.visibilityOfElementLocated(employeeIdField));
+        return idField.getAttribute("value").trim();
+    }
+
+    public void enterEmployeeNames(String firstName, String lastName) {
+        safeEnterText(firstNameField, firstName);
+        safeEnterText(lastNameField, lastName);
+    }
+
+    public String saveEmployeeWithCollisionHandling() {
+        WebElement idField = explicitWait.until(ExpectedConditions.visibilityOfElementLocated(employeeIdField));
+        String activeId = idField.getAttribute("value").trim();
+        clickElement(saveBtn);
+        try {
+            boolean hasCollision = new WebDriverWait(driver, Duration.ofSeconds(2))
+                    .until(ExpectedConditions.visibilityOfElementLocated(idCollisionSpanError))
+                    .isDisplayed();
+            if (hasCollision) {
+                long incrementedId = Long.parseLong(activeId) + 1;
+                activeId = String.valueOf(incrementedId);
+                clearWithKeyboard(employeeIdField);
+                safeEnterText(employeeIdField, activeId);
+                clickElement(saveBtn);
+            }
+        } catch (TimeoutException e) {
+        }
+        explicitWait.until(ExpectedConditions.urlContains("viewPersonalDetails"));
+        return activeId;
+    }
+
+    public void clickSaveOnPersonalDetailsPage() {
+        clickSaveButton(detailsSaveBtn);
+        waitForSuccessToast();
+    }
+
+    public void clickSaveOnPersonalDetailsWithoutToastCheck() {
+        clickSaveButton(detailsSaveBtn);
+        try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        try {
+            new WebDriverWait(driver, Duration.ofSeconds(5))
+                    .until(ExpectedConditions.invisibilityOfElementLocated(formLoaderOverlay));
+        } catch (Exception e) {
+        }
+    }
+
+    public void navigateToEmployeeList() {
+        try {
+            new WebDriverWait(driver, Duration.ofSeconds(5))
+                    .until(ExpectedConditions.invisibilityOfElementLocated(formLoaderOverlay));
+        } catch (Exception e) {
+        }
+        // Fixed syntax: Uses zero-indexed arguments array mapping to click cleanly via JavaScript
+        WebElement tabElement = explicitWait.until(ExpectedConditions.elementToBeClickable(employeeListTab));
+        ((JavascriptExecutor) driver).executeScript("arguments[0].click();", tabElement);
+    }
+
+    public void searchByEmployeeId(String employeeId) {
+        try { clickElement(resetBtn); } catch (TimeoutException e) {}
+        safeEnterText(searchEmpIdField, employeeId);
         clickElement(searchBtn);
-        
-        // PAUSE OPTIMIZATION: Wait a small moment to let the network grid refresh animation complete
-        try { Thread.sleep(1000); } catch (Exception ignored) {}
-        
-        // Verify target identification token string cell populates inside the data table body
-        try {
-            String exactCellXpath = "//div[@class='oxd-table-body']//div[text()='" + empId + "']";
-            WebElement resultCell = wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath(exactCellXpath)));
-            
-            System.out.println("LOG SUCCESS: Confirmed target employee record found in table grid for ID: " + empId);
-            return resultCell.isDisplayed();
-        } catch (Exception e) {
-            System.err.println("LOG ERROR: Target employee row matching ID " + empId + " did not populate the table grid timely.");
-            return false;
-        }
     }
 
-    /**
-     * Locates the newly filtered row by Employee ID and clicks it to open the profile.
-     */
-    public void selectEmployeeFromGrid(String empId) {
-        String cellTextXpath = "//div[@class='oxd-table-body']//div[text()='" + empId + "']";
-        
-        try {
-            WebElement interactiveCell = wait.until(ExpectedConditions.elementToBeClickable(By.xpath(cellTextXpath)));
-            try { Thread.sleep(500); } catch (Exception ignored) {}
-            
-            interactiveCell.click();
-            System.out.println("LOG: Clicked on Employee record text node: " + empId);
-            
-            wait.until(ExpectedConditions.urlContains("viewPersonalDetails"));
-        } catch (Exception e) {
-            System.out.println("WARNING: Native text cell click blocked. Injecting JavaScript bypass click routine...");
-            try {
-                WebElement fallbackCell = driver.findElement(By.xpath(cellTextXpath));
-                // FIXED: Corrected the truncated Javascript script syntax execution sequence block parameters
-                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", fallbackCell);
-                wait.until(ExpectedConditions.urlContains("viewPersonalDetails"));
-            } catch (Exception fatalEx) {
-                System.err.println("LOG ERROR: Failed to click employee row for ID: " + empId);
-                throw fatalEx;
-            }
-        }
+    public void clickOnMatchingEmployee(String employeeId) {
+        WebElement cell = explicitWait.until(ExpectedConditions.elementToBeClickable(employeeCell(employeeId)));
+        cell.click();
+        explicitWait.until(ExpectedConditions.urlContains("viewPersonalDetails"));
     }
 
-    /**
-     * Updates the marital status and gender fields on the Personal Details profile page 
-     * and validates the successful save confirmation notification banner.
-     */
-    /**
-     * Updates the marital status and gender fields on the Personal Details profile page 
-     * and validates the successful save confirmation notification banner.
-     */
-    public void updatePersonalDetailsAndSave() {
-        By maritalDropdown = By.xpath(utils.LocatorLoader.getValue("pim.maritalDropdown"));
-        By optionMarried = By.xpath(utils.LocatorLoader.getValue("pim.maritalOptionMarried"));
-        By genderMale = By.xpath(utils.LocatorLoader.getValue("pim.genderMaleRadio"));
-        By personalSaveBtn = By.xpath(utils.LocatorLoader.getValue("pim.personalDetailsSaveBtn"));
+    public void updateDemographicsAndIdentifiers(String specialCharLicense) {
+        explicitWait.until(d -> ((JavascriptExecutor) d).executeScript("return document.readyState").equals("complete"));
+        explicitWait.until(ExpectedConditions.visibilityOfElementLocated(licenseNoField));
 
-        System.out.println("LOG: Initiating personal profile details update workflow...");
+        clickElement(maritalDropdown);
+        clickElement(optionMarried);
+        clickElement(genderMaleRadio);
 
-        try {
-            // 1. Structural Sync: Wait until the secondary save button is visible to ensure the layout has loaded
-            WebElement saveBtnElement = wait.until(ExpectedConditions.visibilityOfElementLocated(personalSaveBtn));
-            
-            // 2. Scroll Optimization: Force the browser view layout down to prevent elements from being hidden under navigation menus
-            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block: 'center'});", saveBtnElement);
-            try { Thread.sleep(1000); } catch (Exception ignored) {}
-            
-            // 3. Select Marital Status dropdown option
-            WebElement dropdown = wait.until(ExpectedConditions.elementToBeClickable(maritalDropdown));
-            dropdown.click();
-            
-            WebElement option = wait.until(ExpectedConditions.elementToBeClickable(optionMarried));
-            option.click();
-            System.out.println("LOG: Successfully selected Marital Status as 'Married'.");
+        clearWithKeyboard(licenseNoField);
+        safeEnterText(licenseNoField, specialCharLicense);
 
-            // 4. Select Gender Selection
-            WebElement genderElement = wait.until(ExpectedConditions.elementToBeClickable(genderMale));
-            genderElement.click();
-            System.out.println("LOG: Successfully toggled Gender selection to 'Male'.");
+        String formattedTodayDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        clearWithKeyboard(dateOfBirthField);
+        safeEnterText(dateOfBirthField, formattedTodayDate);
 
-            // 5. Save this specific form layout block
-            saveBtnElement.click();
-            System.out.println("LOG: Dispatched Personal Details profile save event transaction.");
+        clickSaveButton(personalSaveBtn);
+        waitForSuccessToast();
+    }
 
-            // Explicitly parse and verify confirmation toast status banner response
-            WebDriverWait shortWait = new WebDriverWait(driver, Duration.ofSeconds(5));
-            shortWait.until(ExpectedConditions.visibilityOfElementLocated(successToast));
-            System.out.println("LOG SUCCESS: Personal profile updates verified successfully via notification pop-up banner.");
-            
-        } catch (Exception e) {
-            System.err.println("LOG ERROR: Failed inside updatePersonalDetailsAndSave execution block. Attempting fallback click sequence...");
-            // Alternative layout execution recovery block if elements remain blocked
-            try {
-                WebElement dropdownFallback = driver.findElement(maritalDropdown);
-                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", dropdownFallback);
-                WebElement optionFallback = wait.until(ExpectedConditions.elementToBeClickable(optionMarried));
-                optionFallback.click();
-                
-                WebElement genderFallback = driver.findElement(genderMale);
-                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", genderFallback);
-                
-                driver.findElement(personalSaveBtn).click();
-                System.out.println("LOG: Managed personal info updates via fallback execution recovery path completely.");
-            } catch (Exception fatalEx) {
-                System.err.println("FATAL ERROR: Profile interaction blocked completely on the layout canvas.");
-                throw e;
-            }
-        }
+    public String getMaritalStatus() {
+        return getElementText(maritalSelected).trim();
+    }
+
+    public boolean isMaleSelected() {
+        return driver.findElement(genderMaleInput).isSelected();
+    }
+
+    public void selectEmployeeCheckbox(String employeeId) {
+        WebElement checkbox = explicitWait.until(ExpectedConditions.elementToBeClickable(employeeCheckbox(employeeId)));
+        checkbox.click();
+    }
+
+    public void deleteSelectedEmployee() {
+        clickElement(deleteIconFromRow);
+        By textConfirmBtnXpath = By.xpath("//button[contains(.,'Yes, Delete')]");
+        WebElement targetConfirmBtn = explicitWait.until(ExpectedConditions.presenceOfElementLocated(textConfirmBtnXpath));
+        // Fixed syntax: Uses zero-indexed arguments array mapping to execute click cleanly
+        ((JavascriptExecutor) driver).executeScript("arguments[0].click();", targetConfirmBtn);
+        waitForSuccessToast();
+    }
+
+    public boolean isRecordDeletedSuccessfully() {
+        return isElementDisplayed(noRecordsFoundText);
+    }
+
+    private void clickSaveButton(By buttonLocator) {
+        WebElement button = explicitWait.until(ExpectedConditions.presenceOfElementLocated(buttonLocator));
+        // Fixed syntax: Uses zero-indexed arguments array mapping to handle center layout scroll
+        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block:'center'});", button);
+        clickElement(buttonLocator);
+    }
+
+    private void waitForSuccessToast() {
+        explicitWait.until(ExpectedConditions.visibilityOfElementLocated(successToast));
+        explicitWait.until(ExpectedConditions.invisibilityOfElementLocated(successToast));
     }
 }
-
-        

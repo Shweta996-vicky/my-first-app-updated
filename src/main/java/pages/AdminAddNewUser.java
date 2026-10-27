@@ -1,123 +1,126 @@
 package pages;
 
+import java.time.Duration;
+import java.util.concurrent.ThreadLocalRandom;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
-
 import base.BasePage;
+import utils.ConfigReader;
 import utils.LocatorLoader;
-import java.time.Duration;
 
-/**
- * Page Object representing the Admin module user management panel workflows in OrangeHRM.
- */
 public class AdminAddNewUser extends BasePage {
 
-    // Centralised cached locators mapped from properties configuration
-    private final By menuAdmin = By.xpath(LocatorLoader.getValue("menu.admin"));
-    private final By addBtn = By.xpath(LocatorLoader.getValue("admin.addBtn"));
-    private final By userRoleDropdown = By.xpath(LocatorLoader.getValue("user.userRoleDropdown"));
-    private final By roleOptionESS = By.xpath(LocatorLoader.getValue("user.roleOptionESS"));
-    private final By empNameInput = By.xpath(LocatorLoader.getValue("user.empNameInput"));
-    private final By empNameOption = By.xpath(LocatorLoader.getValue("user.empNameOption"));
-    private final By statusDropdown = By.xpath(LocatorLoader.getValue("user.statusDropdown"));
-    private final By statusEnabledOption = By.xpath(LocatorLoader.getValue("user.statusEnabledOption"));
-    private final By usernameInput = By.xpath(LocatorLoader.getValue("user.usernameInput"));
-    private final By passwordInput = By.xpath(LocatorLoader.getValue("user.passwordInput"));
-    private final By confirmPasswordInput = By.xpath(LocatorLoader.getValue("user.confirmPasswordInput"));
-    private final By saveBtn = By.xpath(LocatorLoader.getValue("user.saveBtn"));
-    private final By successToast = By.xpath(LocatorLoader.getValue("pim.successToast"));
+    private final By menuAdmin = locator("menu.admin");
+    private final By addBtn = locator("admin.addBtn");
+    private final By roleDropdown = locator("user.userRoleDropdown");
+    private final By employeeNameInput = locator("user.empNameInput");
+    private final By statusDropdown = locator("user.statusDropdown");
+    private final By statusEnabled = locator("user.statusEnabledOption");
+    private final By usernameInput = locator("user.usernameInput");
+    private final By passwordInput = locator("user.passwordInput");
+    private final By confirmPasswordInput = locator("user.confirmPasswordInput");
+    private final By saveBtn = locator("user.saveBtn");
+    private final By successToast = locator("pim.successToast");
+    private final By usernameRequired = locator("user.usernameRequiredError");
+    private final By fieldErrorSubtext = By.xpath("//span[contains(@class,'oxd-input-field-error-message')]");
+    private final By dropdownLoaderSpinner = By.xpath("//div[contains(@class, 'oxd-autocomplete-text-input--loading')]");
+
+    private final By autocompleteOptionWrapper = By.xpath("//div[@role='listbox' or contains(@class, 'oxd-autocomplete-dropdown')]");
 
     public AdminAddNewUser(WebDriver driver) {
         super(driver);
     }
 
-    /**
-     * Complete step-by-step navigation, page analytics tracking, 
-     * and form configuration profile entry for creating a new ESS system user account.
-     */
-    public void navigateAndFillForm() {
-        // 1. Navigate to Admin Module
-        try {
-            WebElement adminMenu = wait.until(ExpectedConditions.elementToBeClickable(menuAdmin));
-            adminMenu.click();
-        } catch (Exception e) {
-            WebElement adminMenuFallback = driver.findElement(menuAdmin);
-            ((JavascriptExecutor) driver).executeScript("arguments.click();", adminMenuFallback);
-        }
-        
-        // Dynamic Sync: Wait for page path shift completely before analyzing titles
-        wait.until(ExpectedConditions.urlContains("/admin/"));
-        
-        // Capture and print Admin Landing Metrics
-        System.out.println("==================================================");
-        System.out.println("LOG: Successfully Navigated to Admin Module:");
-        System.out.println("Captured Admin Page Title : " + driver.getTitle());
-        System.out.println("Captured Admin Page URL   : " + driver.getCurrentUrl());
-        System.out.println("==================================================");
+    private By locator(String key) {
+        return By.xpath(LocatorLoader.getValue(key));
+    }
 
-        // 2. Click Add User button
+    public void navigateToAddUser() {
+        clickElement(menuAdmin);
+        wait.until(ExpectedConditions.urlContains("/admin/"));
         clickElement(addBtn);
         wait.until(ExpectedConditions.urlContains("/saveSystemUser"));
+    }
+
+    // Types the first name, waits for the query spinner, and uses keyboard events to select option 1 cleanly
+    private void selectEmployeeFromAutocomplete(String employeeFirstName) {
+        WebElement inputField = wait.until(ExpectedConditions.visibilityOfElementLocated(employeeNameInput));
         
-        // Capture and print Add Screen Title Metrics
-        System.out.println("==================================================");
-        System.out.println("LOG: Landed on Add User Configuration Panel Form:");
-        System.out.println("Captured Add Page Title   : " + driver.getTitle());
-        System.out.println("==================================================");
-
-        // 3. Select User Role as ESS from dropdown layout configuration block
-        clickElement(userRoleDropdown);
-        clickElement(roleOptionESS);
-        System.out.println("LOG: Configured User Role as 'ESS'.");
-
-        // 4. Enter Employee Name and select exact matching option from autocomplete suggestion panel
-        String targetEmployee = "John Doe";
-        safeEnterText(empNameInput, targetEmployee);
+        safeEnterText(employeeNameInput, employeeFirstName);
         
-        // Explicitly wait until the network search returns matching hints layout panels
-        WebElement matchedOption = wait.until(ExpectedConditions.elementToBeClickable(empNameOption));
-        matchedOption.click();
-        System.out.println("LOG: Confirmed Employee Name mapping link for: " + targetEmployee);
-
-        // 5. Select Status Dropdown and toggle it to Enabled
-        clickElement(statusDropdown);
-        clickElement(statusEnabledOption);
-        System.out.println("LOG: Configured Account Status condition state to 'Enabled'.");
-
-        // 6. Generate and enter a unique Username exceeding the 5-character verification constraint rule
-        long randomSuffix = System.currentTimeMillis() % 100000;
-        String nameWithoutSpaces = targetEmployee.replace(" ", "");
-        String runtimeUser = nameWithoutSpaces + randomSuffix; // e.g., JohnDoe54321
-        
-        // Enforce the validation criteria explicitly before interacting with elements
-        if (runtimeUser.length() < 5) {
-            runtimeUser = runtimeUser + "UserBypass";
-        }
-        
-        System.out.println("LOG: Generated compliance username: " + runtimeUser + " (Length: " + runtimeUser.length() + ")");
-        safeEnterText(usernameInput, runtimeUser);
-
-        // 7. Generate and enter password combination strings matching the pattern (name@123)
-        String runtimePassword = nameWithoutSpaces + "@123"; // e.g., JohnDoe@123
-        safeEnterText(passwordInput, runtimePassword);
-        safeEnterText(confirmPasswordInput, runtimePassword);
-        System.out.println("LOG: Configured password parameters completely.");
-
-        // 8. Dispatched Form Submission Event Transaction
-        clickElement(saveBtn);
-        System.out.println("LOG: Dispatched creation save request event to system directory backend.");
-
-        // 9. Sync verification check loop for server toast confirmation banner message response
         try {
-            WebDriverWait shortWait = new WebDriverWait(driver, Duration.ofSeconds(6));
-            shortWait.until(ExpectedConditions.visibilityOfElementLocated(successToast));
-            System.out.println("LOG SUCCESS: Admin user profile account addition complete and saved successfully.");
-        } catch (Exception e) {
-            System.out.println("WARNING: Success toast disappeared instantly or encountered element sync layer delay. Workflow execution continuing.");
+            new WebDriverWait(driver, Duration.ofSeconds(4))
+                    .until(ExpectedConditions.invisibilityOfElementLocated(dropdownLoaderSpinner));
+        } catch (TimeoutException e) {
         }
+        
+        try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        wait.until(ExpectedConditions.visibilityOfElementLocated(autocompleteOptionWrapper));
+        
+        inputField.sendKeys(Keys.DOWN);
+        try { Thread.sleep(300); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        inputField.sendKeys(Keys.ENTER);
+        try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+
+    public boolean isMandatoryFieldsBlankValidationPassed() {
+        navigateToAddUser();
+        clickElement(saveBtn);
+        try {
+            return wait.until(ExpectedConditions.visibilityOfElementLocated(fieldErrorSubtext)).isDisplayed();
+        } catch (TimeoutException e) {
+            return false;
+        }
+    }
+
+    public String assignUserRoleToEmployee(String employeeFirstName, String employeeLastName) {
+        clickElement(roleDropdown);
+        By roleOptionEss = By.xpath("//div[@role='option']//span[text()='ESS']");
+        clickElement(roleOptionEss);
+
+        selectEmployeeFromAutocomplete(employeeFirstName);
+
+        clickElement(statusDropdown);
+        clickElement(statusEnabled);
+
+        String uniqueUsername = employeeFirstName.replaceAll("[^a-zA-Z0-9]", "")
+                + ThreadLocalRandom.current().nextInt(100000, 999999);
+
+        String systemPassword = ConfigReader.get("test.admin.password");
+        safeEnterText(passwordInput, systemPassword);
+
+        safeEnterText(usernameInput, "");
+        safeEnterText(confirmPasswordInput, systemPassword);
+        clickElement(saveBtn);
+        wait.until(ExpectedConditions.visibilityOfElementLocated(usernameRequired));
+
+        safeEnterText(usernameInput, uniqueUsername);
+        safeEnterText(confirmPasswordInput, systemPassword + "Mismatch");
+        clickElement(saveBtn);
+
+        safeEnterText(confirmPasswordInput, systemPassword);
+        clickSaveButton(saveBtn);
+        
+        return uniqueUsername;
+    }
+
+    // Fixed Method: Correctly maps zero-indexed arguments arrays to execute scroll and click actions safely
+    private void clickSaveButton(By buttonLocator) {
+        WebElement button = wait.until(ExpectedConditions.presenceOfElementLocated(buttonLocator));
+        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block:'center'});", button);
+        try {
+            button.click();
+        } catch (Exception e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", button);
+        }
+        wait.until(ExpectedConditions.visibilityOfElementLocated(successToast));
+        wait.until(ExpectedConditions.invisibilityOfElementLocated(successToast));
     }
 }

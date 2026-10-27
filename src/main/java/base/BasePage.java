@@ -1,76 +1,99 @@
 package base;
 
+import java.time.Duration;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
-import java.time.Duration;
 
 public class BasePage {
-    protected WebDriver driver;
-    protected WebDriverWait wait;
+
+    protected final WebDriver driver;
+    protected final WebDriverWait wait;
+
+    private static final long BEFORE_CLICK_MS = 400;
+    private static final long AFTER_CLICK_MS = 600;
+    private static final long BEFORE_TYPING_MS = 300;
+    private static final long BETWEEN_CHARACTERS_MS = 50;
+    private static final long AFTER_TYPING_MS = 400;
+    private static final long AFTER_CHECK_MS = 200;
 
     public BasePage(WebDriver driver) {
         this.driver = driver;
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(15));
     }
 
-    /**
-     * Restores the browser configuration setup profile required by the test class initialization step.
-     */
     public static ChromeOptions getChromeOptionsSetup() {
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--remote-allow-origins=*");
-        // You can add arguments like "--headless" here later if you run via CI servers
+        options.addArguments("--start-maximized");
         return options;
     }
 
-    /**
-     * Pauses execution for a specified number of milliseconds to visually slow down the run.
-     * Adjusted to keep the automation deliberately at a slower pace for analysis.
-     */
-    protected void visualDelay(long milliseconds) {
+    private void visualDelay(long milliseconds) {
         try {
             Thread.sleep(milliseconds);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            throw new RuntimeException("Visual delay interrupted", e);
         }
     }
 
-    /**
-     * Shared custom click method updated with distinct pace stabilizers.
-     */
     public void clickElement(By locator) {
-        // Wait until target is ready in the DOM
         WebElement element = wait.until(ExpectedConditions.elementToBeClickable(locator));
-        
-        // 1. Long pause BEFORE clicking so you can see exactly where the cursor is going
-        visualDelay(1500); 
-        
-        element.click();
-        
-        // 2. Pause AFTER clicking so you can watch the application's page change transition
-        visualDelay(1000); 
+        visualDelay(BEFORE_CLICK_MS);
+        try {
+            element.click();
+        } catch (org.openqa.selenium.ElementClickInterceptedException | org.openqa.selenium.StaleElementReferenceException e) {
+            try { Thread.sleep(500); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            WebElement fallbackElement = wait.until(ExpectedConditions.elementToBeClickable(locator));
+            ((org.openqa.selenium.JavascriptExecutor) driver).executeScript("arguments[0].click();", fallbackElement);
+        }
+        visualDelay(AFTER_CLICK_MS);
     }
 
-    /**
-     * Shared custom text entry method updated with typing speed limiters.
-     */
     public void safeEnterText(By locator, String text) {
         WebElement element = wait.until(ExpectedConditions.visibilityOfElementLocated(locator));
         
-        // 1. Pause before starting to interact with the input field box
-        visualDelay(1000); 
+        String os = System.getProperty("os.name").toLowerCase();
+        org.openqa.selenium.Keys modifier = os.contains("mac") ? org.openqa.selenium.Keys.COMMAND : org.openqa.selenium.Keys.CONTROL;
         
-        // 2. Character-by-character slow typing animation to watch the input populate realistically
-        for (char ch : text.toCharArray()) {
-            element.sendKeys(String.valueOf(ch));
-            visualDelay(150); // 150ms delay between every single letter typed
+        element.sendKeys(org.openqa.selenium.Keys.chord(modifier, "a"));
+        element.sendKeys(org.openqa.selenium.Keys.BACK_SPACE);
+        element.clear();
+        
+        visualDelay(BEFORE_TYPING_MS);
+        if (text != null && !text.isEmpty()) {
+            for (char character : text.toCharArray()) {
+                element.sendKeys(String.valueOf(character));
+                visualDelay(BETWEEN_CHARACTERS_MS);
+            }
         }
-        
-        // 3. Pause after typing completion to review the final string layout values
-        visualDelay(1000); 
+        visualDelay(AFTER_TYPING_MS);
+    }
+
+    public String getElementText(By locator) {
+        String text = wait.until(ExpectedConditions.visibilityOfElementLocated(locator)).getText();
+        visualDelay(AFTER_CHECK_MS);
+        return text;
+    }
+
+    public boolean isElementDisplayed(By locator) {
+        try {
+            return wait.until(ExpectedConditions.visibilityOfElementLocated(locator)).isDisplayed();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public boolean isElementEnabled(By locator) {
+        boolean enabled = wait.until(ExpectedConditions.visibilityOfElementLocated(locator)).isEnabled();
+        visualDelay(AFTER_CHECK_MS);
+        return enabled;
+    }
+
+    public void waitForUrlContains(String expectedUrl) {
+        wait.until(ExpectedConditions.urlContains(expectedUrl));
     }
 }

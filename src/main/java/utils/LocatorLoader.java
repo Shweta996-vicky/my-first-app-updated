@@ -1,32 +1,48 @@
 package utils;
 
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
-public class LocatorLoader {
-    private static Properties props = new Properties();
+public final class LocatorLoader {
 
+    private static final Properties PROPERTIES = new Properties();
+
+    // Attemps to load locators.properties from the resource classpath, falling back to a direct filesystem check if missing
     static {
-        try (InputStream fis = LocatorLoader.class.getClassLoader().getResourceAsStream("locators.properties")) {
-            if (fis != null) {
-                props.load(fis);
+        try (InputStream resource = LocatorLoader.class
+                .getClassLoader()
+                .getResourceAsStream("locators.properties")) {
+
+            if (resource != null) {
+                PROPERTIES.load(resource);
             } else {
-                // Fallback for standalone absolute execution paths
-                try (FileInputStream fileStream = new FileInputStream("src/main/resources/locators.properties")) {
-                    props.load(fileStream);
+                try (InputStream file = new FileInputStream("locators.properties")) {
+                    PROPERTIES.load(file);
                 }
             }
-        } catch (Exception e) {
-            throw new RuntimeException("CRITICAL: Failed to safely parse execution properties storage repository file structures.", e);
+
+        } catch (IOException e) {
+            throw new ExceptionInInitializerError(
+                    new IllegalStateException(
+                            "Failed to load locators.properties. Check the file location and format.",
+                            e));
         }
     }
 
-    public static String getValue(String targetKey) {
-        String fetched = props.getProperty(targetKey);
-        if (fetched == null) {
-            throw new IllegalArgumentException("PROPERTY ERROR: Request key parameter mapping '" + targetKey + "' was not found inside locators.properties storage config map.");
+    private LocatorLoader() {
+    }
+
+    // Searches for the locator property key, ensures it is not blank, and returns the trimmed locator string
+    public static String getValue(String key) {
+        String value = PROPERTIES.getProperty(key);
+
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Missing locator property: " + key);
         }
-        return fetched.trim();
+
+        return value.trim();
     }
 }

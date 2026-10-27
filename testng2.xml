@@ -1,0 +1,14 @@
+
+<suite name="OrangeHRM Automation Suite" verbose="2">
+    <listeners>
+        <listener class-name="utils.TestListener"/>
+    </listeners>
+    <test name="OrangeHRM Regression Tests">
+        <classes>
+           <class name="tests.LoginTest" />
+            <class name="tests.PimAddEmployeeTest" />
+            <class name="tests.AdminAddNewUserTest" />
+        </classes>
+    </test>
+</suite>
+
